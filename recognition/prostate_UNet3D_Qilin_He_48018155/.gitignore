@@ -1,0 +1,20 @@
+# === Project Data & Outputs ===
+HipMRI_study_complete_release_v1/
+wandb/
+*.nii
+*.nii.gz
+*.pt
+*.pth
+*.npz
+*.npy
+
+# === Python Cache & Environment ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.swp
+.env/
+.venv/
+.vscode/
