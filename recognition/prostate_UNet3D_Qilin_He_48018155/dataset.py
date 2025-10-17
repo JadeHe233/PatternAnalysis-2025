@@ -1,8 +1,10 @@
 import numpy as np
 import nibabel as nib
 from tqdm import tqdm
-import glob
+from torch.utils.data import Dataset
+import torch
 
+# Helper functions
 def to_channels(arr: np.ndarray, dtype=np.uint8)-> np.ndarray:
     channels = np.unique(arr)
     res = np.zeros(arr.shape + ( len(channels),), dtype=dtype)
@@ -13,8 +15,8 @@ def to_channels(arr: np.ndarray, dtype=np.uint8)-> np.ndarray:
     return res
 
 def load_data_3D(imageNames, normImage=False, categorical=False,
-                 dtype=np.float32, getAffines=False,
-                 orient=False, early_stop=False):
+                dtype=np.float32, getAffines=False,
+                early_stop=False):
     '''
     Load medical image data from names, cases list provided into a list for each.
 
@@ -29,7 +31,7 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
     '''
     affines = []
 
-     #~ interp = 'continuous'
+    #~ interp = 'continuous'
     interp = 'linear'
     if dtype == np.uint8: #assume labels
         interp = 'nearest'
@@ -37,10 +39,6 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
     #get fixed size
     num = len(imageNames)
     niftiImage = nib.load(imageNames[0])
-    if orient:
-        niftiImage = im.applyOrientation(niftiImage, interpolation=interp, scale=1)
-        #~ testResultName = "oriented.nii.gz"
-        #~ niftiImage.to_filename(testResultName)
     first_case = niftiImage.get_fdata(caching='unchanged')
     if len(first_case.shape) == 4:
         first_case = first_case[:, :, :, 0] #sometimes extra dims, remove
@@ -54,8 +52,6 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
 
     for i, inName in enumerate(tqdm(imageNames)):
         niftiImage = nib.load(inName)
-        if orient:
-            niftiImage = im.applyOrientation(niftiImage, interpolation=interp, scale=1)
         inImage = niftiImage.get_fdata(caching='unchanged') #read disk only
         affine = niftiImage.affine
         if len(inImage.shape) == 4:
@@ -67,7 +63,7 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
             #~ inImage = 255. * inImage / inImage.max()
             inImage = (inImage - inImage.mean()) / inImage.std()
         if categorical:
-            inImage = utils.to_channels(inImage, dtype=dtype)
+            inImage = to_channels(inImage, dtype=dtype)
             #~ images[i,:,:,:,:] = inImage
             images[i,:inImage.shape[0],:inImage.shape[1],:inImage.shape[2],:inImage.shape[3]] = inImage #with pad
         else:
@@ -83,8 +79,18 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
     else:
         return images
 
-images = glob.glob("HipMRI_study_complete_release_v1/semantic_MRs_anon/*.nii.gz")
-labels = glob.glob("HipMRI_study_complete_release_v1/semantic_labels_anon/*.nii.gz")
+class MRIDataset(Dataset):
+    def __init__(self, mri_files, label_files):
+       self.mri_files = mri_files
+       self.label_files = label_files
 
-print("Found", len(images), "MRI files")
-print("Found", len(labels), "Label files")
+    def __len__(self):
+        return len(self.mri_files)
+    
+    def __getitem__(self, idx):
+        image = load_data_3D([self.mri_files[idx]], normImage=True)[0]
+        label = load_data_3D([self.label_files[idx]], categorical=True, dtype=np.uint8)[0]
+
+        image = torch.tensor(image, dtype=torch.float32).unsqueeze(0)  # [1, D, H, W]
+        label = torch.tensor(label, dtype=torch.long)                  # [D, H, W]
+        return image, label
