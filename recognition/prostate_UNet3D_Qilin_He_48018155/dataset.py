@@ -1,6 +1,5 @@
 import numpy as np
 import nibabel as nib
-from tqdm import tqdm
 from torch.utils.data import Dataset
 import torch
 
@@ -50,7 +49,7 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
         rows, cols, depth = first_case.shape
         images = np.zeros((num, rows, cols, depth), dtype=dtype)
 
-    for i, inName in enumerate(tqdm(imageNames)):
+    for i, inName in enumerate(imageNames):
         niftiImage = nib.load(inName)
         inImage = niftiImage.get_fdata(caching='unchanged') #read disk only
         affine = niftiImage.affine
@@ -90,7 +89,11 @@ class MRIDataset(Dataset):
     def __getitem__(self, idx):
         image = load_data_3D([self.mri_files[idx]], normImage=True)[0]
         label = load_data_3D([self.label_files[idx]], categorical=True, dtype=np.uint8)[0]
+        
+        # Crop data to prevent CUDA OOM
+        image = image[32:160, 32:160, 32:96]
+        label = label[32:160, 32:160, 32:96, :]
 
         image = torch.tensor(image, dtype=torch.float32).unsqueeze(0)  # [1, D, H, W]
-        label = torch.tensor(label, dtype=torch.long)                  # [D, H, W]
+        label = torch.tensor(label, dtype=torch.float32).permute(3, 0, 1, 2) # [C, D, H, W]
         return image, label

@@ -1,6 +1,7 @@
 # === Project Data & Outputs ===
 HipMRI_study_complete_release_v1/
 wandb/
+prostate_UNet3D_Qilin_He_48018155_hpc/
 *.nii
 *.nii.gz
 *.pt
