@@ -2,6 +2,7 @@ import numpy as np
 import nibabel as nib
 from torch.utils.data import Dataset
 import torch
+import torchio as tio
 
 # Helper functions
 def to_channels(arr: np.ndarray, dtype=np.uint8)-> np.ndarray:
@@ -79,9 +80,10 @@ def load_data_3D(imageNames, normImage=False, categorical=False,
         return images
 
 class MRIDataset(Dataset):
-    def __init__(self, mri_files, label_files):
+    def __init__(self, mri_files, label_files, transform=None):
        self.mri_files = mri_files
        self.label_files = label_files
+       self.transform = transform
 
     def __len__(self):
         return len(self.mri_files)
@@ -96,4 +98,15 @@ class MRIDataset(Dataset):
 
         image = torch.tensor(image, dtype=torch.float32).unsqueeze(0)  # [1, D, H, W]
         label = torch.tensor(label, dtype=torch.float32).permute(3, 0, 1, 2) # [C, D, H, W]
+
+        # Apply the augmentation
+        if self.transform:
+            subject = tio.Subject(
+                image=tio.ScalarImage(tensor=image),
+                label=tio.LabelMap(tensor=label)
+            )
+            subject = self.transform(subject)
+            image = subject.image.data
+            label = subject.label.data
+
         return image, label

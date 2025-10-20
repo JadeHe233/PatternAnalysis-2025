@@ -1,17 +1,21 @@
 from torch.utils.data import DataLoader, random_split
 from dataset import MRIDataset
 from modules import *
+import os
 import glob
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import wandb
 import time
+import torchio as tio
+
+print("Script started...")
 
 # Start a new wandb run to track this script.
 run = wandb.init(
     entity="s4801815-the-university-of-queensland",
     project="prostate-mri-unet3d",
+    mode="offline",
     # Track hyperparameters and run metadata.
     config={
         "learning_rate": 1e-4,
@@ -27,37 +31,77 @@ generator= torch.Generator().manual_seed(seed)
 
 mri_dir   = "HipMRI_study_complete_release_v1/semantic_MRs_anon"
 label_dir = "HipMRI_study_complete_release_v1/semantic_labels_anon"
+print("Checking dataset directories...")
+print(f"  MRI dir exists: {os.path.exists(mri_dir)}")
+print(f"  Label dir exists: {os.path.exists(label_dir)}")
 
 # Use glob to retrieve all nifti files
 # Use sorted to match the MRIs with their labels
 mri_files = sorted(glob.glob(f"{mri_dir}/*.nii.gz"))
 label_files = sorted(glob.glob(f"{label_dir}/*.nii.gz"))
+print(f"  Found {len(mri_files)} MRI files and {len(label_files)} label files.")
 
-dataset = MRIDataset(mri_files, label_files)
+# Augmentation for the training set
+train_transform = tio.Compose([
+    tio.RandomFlip(axes=('LR',), flip_probability=0.5), # Left-right flip
+    tio.RandomAffine(scales=(0.9, 1.1), degrees=10), # Scale ±10%, rotate ±10°
+    tio.RandomElasticDeformation(num_control_points=7, max_displacement=7),  # Tissue warping
+    tio.RandomGamma(log_gamma=(-0.3, 0.3)), # Brightness/contrast change
+    tio.RandomNoise(std=0.01), # Slight Gaussian noise
+    tio.ZNormalization() # Normalise intensity
+])
 
-# Split dataset 
-train_size = int(0.7 * len(dataset))
-val_size = int(0.15 * len(dataset))
-test_size  = len(dataset) - train_size - val_size
+val_transform = tio.Compose([tio.ZNormalization()]) # Augmentation for the val/test set
 
-train_set, val_set, test_set = random_split(dataset, [train_size, val_size, test_size], generator=generator)
+# Split the dataset indices
+dataset_size = len(mri_files)
+train_size = int(0.7 * dataset_size)
+val_size = int(0.15 * dataset_size)
+test_size  = dataset_size - train_size - val_size
+print(f"📊 Split into {train_size} train / {val_size} val / {test_size} test")
+
+train_indices, val_indices, test_indices = torch.utils.data.random_split(
+    range(dataset_size),
+    [train_size, val_size, test_size],
+    generator=generator)
+
+# Split the actual dataset
+print("Splitting the dataset...")
+train_files = [mri_files[i] for i in train_indices]
+train_labels = [label_files[i] for i in train_indices]
+
+val_files = [mri_files[i] for i in val_indices]
+val_labels = [label_files[i] for i in val_indices]
+
+test_files = [mri_files[i] for i in test_indices]
+test_labels = [label_files[i] for i in test_indices]
+
+# Instanciate the split datasets
+train_set = MRIDataset(train_files, train_labels, transform=train_transform)
+val_set   = MRIDataset(val_files, val_labels, transform=val_transform)
+test_set  = MRIDataset(test_files, test_labels, transform=val_transform)
 
 # Data loaders
-train_loader = DataLoader(train_set, batch_size=1, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_set,   batch_size=1, shuffle=False, num_workers=4)
-test_loader = DataLoader(test_set,   batch_size=1, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
+val_loader = DataLoader(val_set,   batch_size=1, shuffle=False)
+test_loader = DataLoader(test_set,   batch_size=1, shuffle=False)
+print("DataLoaders created successfully")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 model = UNet3D(in_channels=1, out_channels=6).to(device)
+print("Model created.")
 
 num_epochs = 50
 criterion = DiceLoss()
 optimiser = optim.Adam(model.parameters(), lr=1e-4)
 
-losses = []
+# Track best validation loss
+best_val_loss = float('inf')
+best_model_path = None
 
-import os
+# Create a folder to save the checkpoints
 os.makedirs("checkpoints", exist_ok=True)
 
 print("Start training...")
@@ -82,7 +126,6 @@ for epoch in range(num_epochs):
         train_loss += loss.item()
     
     avg_train_loss = train_loss / len(train_loader)
-    losses.append(avg_train_loss)
 
     # --- Validate ---
     model.eval()
@@ -108,12 +151,25 @@ for epoch in range(num_epochs):
 
     # Log to wandb
     wandb.log({
-        "train_loss": train_loss,
-        "val_loss": val_loss,
+        "train_loss": avg_train_loss,
+        "val_loss": avg_val_loss,
         "epoch_time_sec": epoch_time,
-        "epoch": epoch
+        "epoch": epoch + 1
     })
 
+    # Save the best model
+    if avg_val_loss < best_val_loss:
+        best_val_loss = avg_val_loss
+        best_model_path = f"checkpoints/unet3d_best.pth"
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimiser_state_dict': optimiser.state_dict(),
+            'avg_train_loss': avg_train_loss,
+            'avg_val_loss': best_val_loss
+        }, best_model_path)
+        print(f"New best model saved at epoch {epoch+1}: {best_model_path}")
+
 total_time = time.time() - start_time
-print(f"✅ Training complete in {total_time/60:.2f} minutes.")
+print(f"Training complete in {total_time/60:.2f} minutes.")
 wandb.log({"total_training_time_min": total_time / 60})
