@@ -170,7 +170,7 @@ for epoch in range(num_epochs):
         "epoch": epoch + 1
     })
 
-    # Save the best model
+    # Only save the model with the lowest validation loss to avoid overfitting
     if avg_val_loss < best_val_loss:
         best_val_loss = avg_val_loss
         best_model_path = f"checkpoints/unet3d_best.pth"
