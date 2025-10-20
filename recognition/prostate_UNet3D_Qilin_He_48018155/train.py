@@ -109,6 +109,11 @@ optimiser = optim.Adam(model.parameters(), lr=1e-4)
 best_val_loss = float('inf')
 best_model_path = None
 
+# Early stopping parameters
+patience = 10         # Number of epochs to wait for improvement
+no_improve_epochs = 0 # Counter for epochs without improvement
+early_stop = False
+
 # Create a folder to save the checkpoints
 os.makedirs("checkpoints", exist_ok=True)
 
@@ -177,7 +182,25 @@ for epoch in range(num_epochs):
             'avg_val_loss': best_val_loss
         }, best_model_path)
         print(f"New best model saved at epoch {epoch+1}: {best_model_path}")
+        no_improve_epochs = 0  # reset counter
+    else:
+        no_improve_epochs += 1
+    
+    # Check for early stopping
+    if no_improve_epochs >= patience:
+        print(f"Early stopping triggered at epoch {epoch+1}")
+        early_stop = True
+        break
 
 total_time = time.time() - start_time
-print(f"Training complete in {total_time/60:.2f} minutes.")
-wandb.log({"total_training_time_min": total_time / 60})
+if early_stop:
+    print(f"Training stopped early after {epoch+1} epochs due to no improvement.")
+else:
+    print(f"Training completed all {num_epochs} epochs.")
+
+print(f"Total training time: {total_time/60:.2f} minutes.")
+wandb.log({
+    "total_training_time_min": total_time / 60,
+    "stopped_epoch": epoch + 1,
+    "early_stopped": early_stop
+})
