@@ -31,9 +31,6 @@ generator= torch.Generator().manual_seed(seed)
 
 mri_dir   = "HipMRI_study_complete_release_v1/semantic_MRs_anon"
 label_dir = "HipMRI_study_complete_release_v1/semantic_labels_anon"
-print("Checking dataset directories...")
-print(f"  MRI dir exists: {os.path.exists(mri_dir)}")
-print(f"  Label dir exists: {os.path.exists(label_dir)}")
 
 # Use glob to retrieve all nifti files
 # Use sorted to match the MRIs with their labels
@@ -58,12 +55,23 @@ dataset_size = len(mri_files)
 train_size = int(0.7 * dataset_size)
 val_size = int(0.15 * dataset_size)
 test_size  = dataset_size - train_size - val_size
-print(f"📊 Split into {train_size} train / {val_size} val / {test_size} test")
+print(f"Split into {train_size} train / {val_size} val / {test_size} test")
 
-train_indices, val_indices, test_indices = torch.utils.data.random_split(
+train_subset, val_subset, test_subset = torch.utils.data.random_split(
     range(dataset_size),
     [train_size, val_size, test_size],
     generator=generator)
+
+train_indices = train_subset.indices
+val_indices = val_subset.indices
+test_indices = test_subset.indices
+
+# Save splits
+torch.save({
+    'train_indices': train_indices,
+    'val_indices': val_indices,
+    'test_indices': test_indices
+}, "data_splits.pt")
 
 # Split the actual dataset
 print("Splitting the dataset...")
@@ -83,8 +91,8 @@ test_set  = MRIDataset(test_files, test_labels, transform=val_transform)
 
 # Data loaders
 train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
-val_loader = DataLoader(val_set,   batch_size=1, shuffle=False)
-test_loader = DataLoader(test_set,   batch_size=1, shuffle=False)
+val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
+test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
 print("DataLoaders created successfully")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
