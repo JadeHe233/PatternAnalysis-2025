@@ -151,7 +151,7 @@ print(f"Using device: {device}")
 model = UNet3D(in_channels=1, out_channels=6).to(device)
 print("Model created.")
 
-num_epochs = 50
+num_epochs = 2
 criterion = DiceLoss()
 optimiser = optim.Adam(model.parameters(), lr=1e-4)
 
@@ -192,9 +192,10 @@ for epoch in range(num_epochs):
         optimiser.step()
 
         train_loss += loss.item()
+        
         train_loss_per_class += loss_per_class.detach()
     
-    avg_train_loss = train_loss / len(train_loader)
+    avg_train_loss = train_loss / len(train_loader) # Per MRI
     avg_train_loss_per_class = (train_loss_per_class / len(train_loader)).cpu().numpy()
     train_class_losses.append(avg_train_loss_per_class)
 
@@ -209,7 +210,7 @@ for epoch in range(num_epochs):
 
             outputs = model(images)
 
-            loss = criterion(outputs, labels)
+            loss, _ = criterion(outputs, labels)
 
             val_loss += loss.item()
 
@@ -258,21 +259,24 @@ train_class_losses = np.array(train_class_losses)  # shape [epochs, num_classes]
 class_names = ["Background", "Body", "Bones", "Bladder", "Rectum", "Prostate"]
 colors = ["gray", "lightblue", "gold", "lime", "orange", "red"]
 
+# Convert loss → Dice coefficient
+train_class_dice = 1 - np.array(train_class_losses)  # shape [epochs, num_classes]
+
 plt.figure(figsize=(10, 6))
 for c in range(num_classes):
-    plt.plot(range(1, len(train_class_losses) + 1),
-             train_class_losses[:, c],
-             label=f"{class_names[c]} Loss", color=colors[c])
+    plt.plot(range(1, len(train_class_dice) + 1),
+             train_class_dice[:, c],
+             label=f"{class_names[c]} Dice", color=colors[c])
 
 plt.xlabel("Epochs")
-plt.ylabel("Dice Loss (1 - Dice Coefficient)")
-plt.title("Per-Class Dice Loss During Training")
+plt.ylabel("Dice Coefficient (↑ is better)")
+plt.title("Per-Class Dice Coefficient During Training")
 plt.legend()
 plt.grid(alpha=0.4)
 
-# Save the figure
-plt.savefig("Figures/train_dice_loss_per_class.png", dpi=300, bbox_inches="tight")
-plt.show()
+# Save to file (no plt.show() for HPC)
+plt.savefig("Figures/train_dice_coeff_per_class.png", dpi=300, bbox_inches="tight")
+plt.close()
 
 if early_stop:
     print(f"Training stopped early after {epoch+1} epochs due to no improvement.")
