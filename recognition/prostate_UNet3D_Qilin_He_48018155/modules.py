@@ -69,6 +69,9 @@ class UNet3D(nn.Module):
         return self.out(d1) # 32 -> 6
 
 class DiceLoss(nn.Module):
+    """
+    Adapted from: https://colab.research.google.com/drive/1VOsZSyRhyuHLmgoqGriQk01ub4bKNmZ1?usp=sharing
+    """
     def __init__(self, smooth=1e-6):
         super(DiceLoss, self).__init__()
         self.smooth = smooth
@@ -86,6 +89,8 @@ class DiceLoss(nn.Module):
 
         intersection = (predictions * targets).sum(dim=2)
         dice_coeff = (2.0 * intersection + self.smooth) / (predictions.sum(dim=2) + targets.sum(dim=2) + self.smooth)
+        
+        loss_per_class = 1 - dice_coeff.mean(dim=0)  # [C]
+        loss = loss_per_class.mean()  # scalar mean
 
-        loss = 1 - dice_coeff.mean()
-        return loss
+        return loss, loss_per_class

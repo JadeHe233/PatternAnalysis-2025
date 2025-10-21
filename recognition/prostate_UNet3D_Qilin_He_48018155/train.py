@@ -8,6 +8,8 @@ import torch.optim as optim
 import wandb
 import time
 import torchio as tio
+import matplotlib.pyplot as plt
+import numpy as np
 
 print("Script started...")
 
@@ -40,7 +42,7 @@ print(f"  Found {len(mri_files)} MRI files and {len(label_files)} label files.")
 
 # Augmentation for the training set
 train_transform = tio.Compose([
-    tio.RandomFlip(axes=('LR',), flip_probability=0.5), # Left-right flip
+    tio.RandomFlip(axes=(0,), flip_probability=0.5), # Left-right flip
     tio.RandomAffine(scales=(0.9, 1.1), degrees=10), # Scale ±10%, rotate ±10°
     tio.RandomElasticDeformation(num_control_points=7, max_displacement=7),  # Tissue warping
     tio.RandomGamma(log_gamma=(-0.3, 0.3)), # Brightness/contrast change
@@ -49,6 +51,54 @@ train_transform = tio.Compose([
 ])
 
 val_transform = tio.Compose([tio.ZNormalization()]) # Augmentation for the val/test set
+
+"""
+--- Data Augmentation Examples ---
+# Take the first 3 MRI-label pairs
+n_samples = 3
+samples = list(zip(mri_files[:n_samples], label_files[:n_samples]))
+
+# Create subplots: 3 samples × 2 columns (original vs. augmented)
+fig, axes = plt.subplots(n_samples, 2, figsize=(8, 10))
+fig.suptitle("Effect of Augmentation on MRI Samples", fontsize=14)
+
+for i, (mri_path, label_path) in enumerate(samples):
+    # Load NIfTI volumes using nibabel
+    mri_img = nib.load(mri_path).get_fdata()
+    label_img = nib.load(label_path).get_fdata()
+
+    # Wrap into a TorchIO Subject
+    subject = tio.Subject(
+        mri=tio.ScalarImage(mri_path),
+        label=tio.LabelMap(label_path)
+    )
+
+    # Apply your training augmentation pipeline
+    transformed = train_transform(subject)
+
+    # Extract middle slice along z-axis for visualization
+    z = mri_img.shape[2] // 2
+    orig_slice = mri_img[:, :, z]
+    aug_slice  = transformed.mri.data.squeeze().numpy()[:, :, z]
+
+    # Plot original
+    axes[i, 0].imshow(orig_slice, cmap='gray')
+    axes[i, 0].set_title(f"Original MRI {i+1}")
+    axes[i, 0].axis('off')
+
+    # Plot augmented
+    axes[i, 1].imshow(aug_slice, cmap='gray')
+    axes[i, 1].set_title(f"Augmented MRI {i+1}")
+    axes[i, 1].axis('off')
+
+plt.tight_layout()
+
+os.makedirs("Figures", exist_ok=True)
+save_path = os.path.join("Figures", "augmentation_examples.png")
+plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+plt.show()
+"""
 
 # Split the dataset indices
 dataset_size = len(mri_files)
@@ -117,6 +167,9 @@ early_stop = False
 # Create a folder to save the checkpoints
 os.makedirs("checkpoints", exist_ok=True)
 
+num_classes = 6  # Background + 5 organs
+train_class_losses = []
+
 print("Start training...")
 start_time = time.time()
 for epoch in range(num_epochs):
@@ -124,6 +177,8 @@ for epoch in range(num_epochs):
     # --- Train ---
     model.train()
     train_loss = 0
+    train_loss_per_class = torch.zeros(num_classes, device=device)
+
     for images, labels in train_loader:
         images = images.to(device)
         labels = labels.to(device)
@@ -131,14 +186,17 @@ for epoch in range(num_epochs):
         optimiser.zero_grad()
         outputs = model(images)
 
-        loss = criterion(outputs, labels)
+        loss, loss_per_class = criterion(outputs, labels)
 
         loss.backward()
         optimiser.step()
 
         train_loss += loss.item()
+        train_loss_per_class += loss_per_class.detach()
     
     avg_train_loss = train_loss / len(train_loader)
+    avg_train_loss_per_class = (train_loss_per_class / len(train_loader)).cpu().numpy()
+    train_class_losses.append(avg_train_loss_per_class)
 
     # --- Validate ---
     model.eval()
@@ -193,6 +251,29 @@ for epoch in range(num_epochs):
         break
 
 total_time = time.time() - start_time
+
+os.makedirs("Figures", exist_ok=True)
+train_class_losses = np.array(train_class_losses)  # shape [epochs, num_classes]
+
+class_names = ["Background", "Body", "Bones", "Bladder", "Rectum", "Prostate"]
+colors = ["gray", "lightblue", "gold", "lime", "orange", "red"]
+
+plt.figure(figsize=(10, 6))
+for c in range(num_classes):
+    plt.plot(range(1, len(train_class_losses) + 1),
+             train_class_losses[:, c],
+             label=f"{class_names[c]} Loss", color=colors[c])
+
+plt.xlabel("Epochs")
+plt.ylabel("Dice Loss (1 - Dice Coefficient)")
+plt.title("Per-Class Dice Loss During Training")
+plt.legend()
+plt.grid(alpha=0.4)
+
+# Save the figure
+plt.savefig("Figures/train_dice_loss_per_class.png", dpi=300, bbox_inches="tight")
+plt.show()
+
 if early_stop:
     print(f"Training stopped early after {epoch+1} epochs due to no improvement.")
 else:
