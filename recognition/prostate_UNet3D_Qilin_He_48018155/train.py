@@ -151,7 +151,7 @@ print(f"Using device: {device}")
 model = UNet3D(in_channels=1, out_channels=6).to(device)
 print("Model created.")
 
-num_epochs = 2
+num_epochs = 50
 criterion = DiceLoss()
 optimiser = optim.Adam(model.parameters(), lr=1e-4)
 
