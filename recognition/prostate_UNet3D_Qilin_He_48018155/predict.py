@@ -106,3 +106,42 @@ plt.grid(axis="y", linestyle="--", alpha=0.6)
 os.makedirs("Figures", exist_ok=True)
 plt.savefig("Figures/dice_per_class_with_std.png", dpi=300, bbox_inches="tight")
 plt.show()  # for HPC use (no GUI)
+
+# Choose one test example
+example_idx = 0
+mri, label = test_set[example_idx]
+mri = mri.unsqueeze(0).to(device)  # [1, 1, D, H, W]
+label = label.unsqueeze(0).to(device)
+
+with torch.no_grad():
+    pred = model(mri)
+    pred_softmax = torch.softmax(pred, dim=1)
+    pred_label = torch.argmax(pred_softmax, dim=1).cpu().squeeze(0)  # [D, H, W]
+    gt_label = torch.argmax(label, dim=1).cpu().squeeze(0)  # [D, H, W]
+    mri = mri.cpu().squeeze().numpy()
+
+# Pick a central slice (middle along depth axis)
+slice_idx = pred_label.shape[0] // 2
+
+# --- Visualisation ---
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 3, 1)
+plt.imshow(mri[slice_idx], cmap='gray')
+plt.title("MRI Slice")
+plt.axis('off')
+
+plt.subplot(1, 3, 2)
+plt.imshow(gt_label[slice_idx], cmap='tab10', vmin=0, vmax=5)
+plt.title("Ground Truth Label")
+plt.axis('off')
+
+plt.subplot(1, 3, 3)
+plt.imshow(mri[slice_idx], cmap='gray')
+plt.imshow(pred_label[slice_idx], alpha=0.5, cmap='tab10', vmin=0, vmax=5)
+plt.title("Predicted Label Overlay")
+plt.axis('off')
+
+plt.tight_layout()
+os.makedirs("Figures", exist_ok=True)
+plt.savefig("Figures/pred_vs_gt_overlay.png", dpi=300, bbox_inches='tight')
+plt.show()
