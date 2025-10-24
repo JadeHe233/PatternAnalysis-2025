@@ -10,6 +10,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def dice_per_class(pred, target, num_classes=6, eps=1e-6):
+    """
+    Compute the Dice Similarity Coefficient for each class.
+
+    Args:
+        pred: Predictions made by the model in the shape of [B, C, D, H, W]. 
+        B - batch size; C - number of channels; D - depth, number of slices along the z-axis
+        H - height; W - width.
+        target: Ground-truth labels of shape [B, D, H, W], where each voxel value corresponds to a class index.
+        num_classes: the number of segmentation labels.
+        eps: Small constant added to avoid division by zero.
+    
+    Returns:
+        list: a list of Dice Similarity Coefficient for each class.
+    """
     dice_scores = []
     pred = torch.argmax(pred, dim=1)  # [B, D, H, W]
     
@@ -26,6 +40,7 @@ checkpoint_path = "checkpoints/unet3d_best.pth"
 mri_dir   = "HipMRI_study_complete_release_v1/semantic_MRs_anon"
 label_dir = "HipMRI_study_complete_release_v1/semantic_labels_anon"
 
+# Load the split indices
 splits = torch.load("data_splits.pt")
 test_indices = splits["test_indices"]
 
@@ -41,10 +56,12 @@ test_set  = MRIDataset(test_files, test_labels, transform=val_transform)
 test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 model = UNet3D(in_channels=1, out_channels=6).to(device)
 
+# Load the trained model
 checkpoint = torch.load(checkpoint_path, map_location=device)
-model.load_state_dict(checkpoint["model_state_dict"])
+model.load_state_dict(checkpoint["model_state_dict"]) # Load the parameters
 epoch = checkpoint["epoch"]
 val_loss = checkpoint["avg_val_loss"]
 
@@ -73,6 +90,8 @@ std_dice_per_class = dice_all_classes.std(axis=0)
 
 print(f"Test Dice loss: {avg_test_loss:.4f}  →  Dice ≈ {1 - avg_test_loss:.4f}")
 
+# --- Bar plot for Dice per Class with Std ---
+"""
 class_names = ["Background", "Body", "Bones", "Bladder", "Rectum", "Prostate"]
 print("\n Mean Dice Similarity Coefficient per class:")
 for i, (m, s) in enumerate(zip(mean_dice_per_class, std_dice_per_class)):
@@ -105,8 +124,11 @@ plt.grid(axis="y", linestyle="--", alpha=0.6)
 
 os.makedirs("Figures", exist_ok=True)
 plt.savefig("Figures/dice_per_class_with_std.png", dpi=300, bbox_inches="tight")
-plt.show()  # for HPC use (no GUI)
+plt.show()
+"""
 
+# --- Plot for Overlay Prediction vs Ground Truth ---
+"""
 # Choose one test example
 example_idx = 0
 mri, label = test_set[example_idx]
@@ -123,7 +145,6 @@ with torch.no_grad():
 # Pick a central slice (middle along depth axis)
 slice_idx = pred_label.shape[0] // 2
 
-# --- Visualisation ---
 plt.figure(figsize=(12, 4))
 plt.subplot(1, 3, 1)
 plt.imshow(mri[slice_idx], cmap='gray')
@@ -145,3 +166,4 @@ plt.tight_layout()
 os.makedirs("Figures", exist_ok=True)
 plt.savefig("Figures/pred_vs_gt_overlay.png", dpi=300, bbox_inches='tight')
 plt.show()
+"""

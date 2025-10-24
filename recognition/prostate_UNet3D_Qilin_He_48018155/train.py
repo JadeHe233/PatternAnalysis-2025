@@ -5,27 +5,12 @@ import os
 import glob
 import torch
 import torch.optim as optim
-import wandb
 import time
 import torchio as tio
 import matplotlib.pyplot as plt
 import numpy as np
 
 print("Script started...")
-
-# Start a new wandb run to track this script.
-run = wandb.init(
-    entity="s4801815-the-university-of-queensland",
-    project="prostate-mri-unet3d",
-    mode="offline",
-    # Track hyperparameters and run metadata.
-    config={
-        "learning_rate": 1e-4,
-        "architecture": "Unet3D",
-        "dataset": "HipMRI",
-        "epochs": 50,
-    },
-)
 
 # Set the random seed
 seed = 233
@@ -52,6 +37,7 @@ train_transform = tio.Compose([
 
 val_transform = tio.Compose([tio.ZNormalization()]) # Augmentation for the val/test set
 
+# --- Plot for Effect of Augmentation ---
 """
 --- Data Augmentation Examples ---
 # Take the first 3 MRI-label pairs
@@ -134,7 +120,7 @@ val_labels = [label_files[i] for i in val_indices]
 test_files = [mri_files[i] for i in test_indices]
 test_labels = [label_files[i] for i in test_indices]
 
-# Instanciate the split datasets
+# Instantiate the split datasets
 train_set = MRIDataset(train_files, train_labels, transform=train_transform)
 val_set   = MRIDataset(val_files, val_labels, transform=val_transform)
 test_set  = MRIDataset(test_files, test_labels, transform=val_transform)
@@ -146,7 +132,6 @@ test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
 print("DataLoaders created successfully")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
 
 model = UNet3D(in_channels=1, out_channels=6).to(device)
 print("Model created.")
@@ -221,14 +206,6 @@ for epoch in range(num_epochs):
       f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | "
       f"Time: {epoch_time:.2f} sec")
 
-    # Log to wandb
-    wandb.log({
-        "train_loss": avg_train_loss,
-        "val_loss": avg_val_loss,
-        "epoch_time_sec": epoch_time,
-        "epoch": epoch + 1
-    })
-
     # Only save the model with the lowest validation loss to avoid overfitting
     if avg_val_loss < best_val_loss:
         best_val_loss = avg_val_loss
@@ -253,6 +230,8 @@ for epoch in range(num_epochs):
 
 total_time = time.time() - start_time
 
+# --- Plot for Per-class Dice Loss during Training ---
+"""
 os.makedirs("Figures", exist_ok=True)
 train_class_losses = np.array(train_class_losses)  # shape [epochs, num_classes]
 
@@ -269,7 +248,7 @@ for c in range(num_classes):
              label=f"{class_names[c]} Dice", color=colors[c])
 
 plt.xlabel("Epochs")
-plt.ylabel("Dice Coefficient (↑ is better)")
+plt.ylabel("Dice Coefficient")
 plt.title("Per-Class Dice Coefficient During Training")
 plt.legend()
 plt.grid(alpha=0.4)
@@ -277,6 +256,7 @@ plt.grid(alpha=0.4)
 # Save to file (no plt.show() for HPC)
 plt.savefig("Figures/train_dice_coeff_per_class.png", dpi=300, bbox_inches="tight")
 plt.close()
+"""
 
 if early_stop:
     print(f"Training stopped early after {epoch+1} epochs due to no improvement.")
@@ -284,8 +264,3 @@ else:
     print(f"Training completed all {num_epochs} epochs.")
 
 print(f"Total training time: {total_time/60:.2f} minutes.")
-wandb.log({
-    "total_training_time_min": total_time / 60,
-    "stopped_epoch": epoch + 1,
-    "early_stopped": early_stop
-})

@@ -6,7 +6,6 @@ environment.yml
 *.nii
 *.nii.gz
 *.pt
-*.pth
 *.npz
 *.npy
 
