@@ -117,23 +117,33 @@ The Adaptive Momentum Estimation (Adam) optimiser is used for the 3D U-Net model
   <img src="Figures/train_dice_coeff_per_class.png" width="700"/>
   <br><em>Figure 3: Per Class Dice Coefficient During Training</em>
 </p>
-The results in Figure 3 are obtained by calculating the DSC (1 - DSC loss per class) for each label, between the training and validation sets. The DSC for all labels show rapid increases around epoch 15, which shows the effect of using the Adam optimser. Later on, the DSCs reach the plateau, suggesting the model has converged and reached the optimal performance. The 3D U-Net model does a good job with segmenting the voxels against the validation set with accuracies above 0.8 for all labels.
+The results in Figure 3 are obtained by calculating the DSC (1 - DSC loss per class) for each label, between the training and validation sets. The DSC for all labels show rapid increases around epoch 15, which shows the effect of using the Adam optimser. Later on, the DSCs reach the plateau, suggesting the model has converged and reached the optimal performance. The 3D U-Net model does a good job with segmenting the voxels against the unseen validation set with accuracies above 0.8 for all labels.
 
 ## Test Results
 [predict.py](predict.py)  
-The best model was trained in epoch 46 with a validation loss of 0.068. It is saved as `checkpoints/unet3d_best.pth`. It can be loaded using:
+The best model was trained in epoch 46 with a mean validation loss of 0.068 across all labels. It is saved as `checkpoints/unet3d_best.pth`. It can be loaded using:
 ```
 checkpoint = torch.load(checkpoint_path, map_location=device)
 model.load_state_dict(checkpoint["model_state_dict"]) # Load the parameters
 ```
 
+<p align="center">
+  <img src="Figures/dice_per_class_with_std.png" width="700"/>
+  <br><em>Figure 5: Example of Prediction</em>
+</p>
 
+Below shows an example of ground-truth label vs model predicted label on a single MRI:
+<p align="center">
+  <img src="Figures/pred_vs_gt_overlay.png" width="700"/>
+  <br><em>Figure 6: Example of Prediction</em>
+</p>
+The predicted regions largely overlap with the ground truth, which supports the 
+visible difference
 
 ## Appendix/Reference
-Çiçek, Ö., Abdulkadir, A., Lienkamp, S.S., Brox, T., Ronneberger, O. (2016). 3D U-Net: Learning Dense Volumetric Segmentation from Sparse Annotation. In: Ourselin, S., Joskowicz, L., Sabuncu, M., Unal, G., Wells, W. (eds) Medical Image Computing and Computer-Assisted Intervention – MICCAI 2016. MICCAI 2016. Lecture Notes in Computer Science(), vol 9901. Springer, Cham. https://doi.org/10.1007/978-3-319-46723-8_49
+1. Çiçek, Ö., Abdulkadir, A., Lienkamp, S.S., Brox, T., Ronneberger, O. (2016). 3D U-Net: Learning Dense Volumetric Segmentation from Sparse Annotation. In: Ourselin, S., Joskowicz, L., Sabuncu, M., Unal, G., Wells, W. (eds) Medical Image Computing and Computer-Assisted Intervention – MICCAI 2016. MICCAI 2016. Lecture Notes in Computer Science(), vol 9901. Springer, Cham. https://doi.org/10.1007/978-3-319-46723-8_49
+2. Dowling, J., Greer, P. (2021). Labelled weekly MR images of the male pelvis. v2. - CSIRO. Data Collection. https://doi.org/10.25919/45t8-p065
+3. Geeksforgeeks. (2025). What is Adam Optimizer? - GeeksforGeeks. GeeksforGeeks. https://www.geeksforgeeks.org/deep-learning/adam-optimizer/
+4. Harisha, L. (2023). Dice Coefficient! What is it? Medium. https://lathashreeh.medium.com/dice-coefficient-what-is-it-ff090ec97bda
 
-Dowling, J., Greer, P. (2021). Labelled weekly MR images of the male pelvis. v2. - CSIRO. Data Collection. https://doi.org/10.25919/45t8-p065
-
-Geeksforgeeks. (2025). What is Adam Optimizer? - GeeksforGeeks. GeeksforGeeks. https://www.geeksforgeeks.org/deep-learning/adam-optimizer/
-
-Harisha, L. (2023). Dice Coefficient! What is it? Medium. https://lathashreeh.medium.com/dice-coefficient-what-is-it-ff090ec97bda
+## Dependencies

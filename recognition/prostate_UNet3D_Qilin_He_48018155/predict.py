@@ -7,6 +7,7 @@ import glob
 import torchio as tio
 import os
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 
 def dice_per_class(pred, target, num_classes=6, eps=1e-6):
@@ -128,8 +129,6 @@ plt.show()
 """
 
 # --- Plot for Overlay Prediction vs Ground Truth ---
-"""
-# Choose one test example
 example_idx = 0
 mri, label = test_set[example_idx]
 mri = mri.unsqueeze(0).to(device)  # [1, 1, D, H, W]
@@ -142,28 +141,49 @@ with torch.no_grad():
     gt_label = torch.argmax(label, dim=1).cpu().squeeze(0)  # [D, H, W]
     mri = mri.cpu().squeeze().numpy()
 
-# Pick a central slice (middle along depth axis)
+# Pick a central slice
 slice_idx = pred_label.shape[0] // 2
 
 plt.figure(figsize=(12, 4))
+
+# MRI Slice
 plt.subplot(1, 3, 1)
 plt.imshow(mri[slice_idx], cmap='gray')
 plt.title("MRI Slice")
 plt.axis('off')
 
+# Ground Truth Label
 plt.subplot(1, 3, 2)
 plt.imshow(gt_label[slice_idx], cmap='tab10', vmin=0, vmax=5)
 plt.title("Ground Truth Label")
 plt.axis('off')
 
+# Predicted Overlay
 plt.subplot(1, 3, 3)
 plt.imshow(mri[slice_idx], cmap='gray')
 plt.imshow(pred_label[slice_idx], alpha=0.5, cmap='tab10', vmin=0, vmax=5)
 plt.title("Predicted Label Overlay")
 plt.axis('off')
 
+# --- Add legend ---
+# Class names (adjust if your labels differ)
+class_labels = ["Background", "Body", "Bones", "Bladder", "Rectum", "Prostate"]
+
+# Use the same colormap to get the corresponding colors
+cmap = plt.get_cmap('tab10')
+colors = [cmap(i) for i in range(len(class_labels))]
+
+# Create legend handles
+patches = [mpatches.Patch(color=colors[i], label=class_labels[i]) for i in range(len(class_labels))]
+plt.legend(
+    handles=patches,
+    bbox_to_anchor=(1.05, 0.5),
+    loc='center left',
+    borderaxespad=0.,
+    title="Classes"
+)
+
 plt.tight_layout()
 os.makedirs("Figures", exist_ok=True)
 plt.savefig("Figures/pred_vs_gt_overlay.png", dpi=300, bbox_inches='tight')
 plt.show()
-"""
