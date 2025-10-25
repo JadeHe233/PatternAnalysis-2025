@@ -15,7 +15,9 @@ The 3D U-Net model implemented in this project is based on the architecture sugg
   <img src="Figures/3dunet_arch.png" width="700"/>
   <br><em>Figure 1: 3D U-Net Architecture</em>
 </p>
-Similar to the structure of the 2D U-Net, The 3D U-Net is also a convolutional autoencoder that replaces all the 2D operations with 3D convolutions, so the volumetric medical data can be processed by voxels instead of pixels of independent 2D slices. Figure 1 shows the architecture of the 3D U-Net suggested by Çiçek et al. (2016). In the contraction path, each level consists of two sets of a 3x3x3 convolution followed by a batch normalisation (BN) and a rectified linear unit (ReLu), then a max pooling layer of 2x2x2 with a stride of 2 to extract feature information and reduce the spatial resolution. Since the architecture is symmetric, the expansion path mirrors the structure of the contraction path. Each level starts with a 2x2x2 transpose convolution to recover the spatial resolution, followed by two sets of a 3x3x3 convolution, a BN and a ReLu. This helps to segment the locations of objects in the data. Additionally, each level has a skip path that concatenates the encoder with its corresponding decoder to pass the high-resolution spatial information that is lost through down-sampling. Finally, a 1x1x1 convolution is used to reduce the output channels to the number of labels - 3 in Figure 1. For this architecture, the weighted softmax loss function is used. It allows the network to train on sparse annotations. By setting the weight of unlabeled voxel to 0, the model can only learn from the labelled voxels to generalise the whole volume (Çiçek et al, 2016).  
+Similar to the structure of the 2D U-Net, The 3D U-Net is also a convolutional autoencoder that replaces all the 2D operations with 3D convolutions, so the volumetric medical data can be processed by voxels instead of pixels of independent 2D slices. Figure 1 shows the architecture of the 3D U-Net suggested by Çiçek et al. (2016). In the contraction path, each level consists of two sets of a 3x3x3 convolution followed by a batch normalisation (BN) and a rectified linear unit (ReLu), then a max pooling layer of 2x2x2 with a stride of 2 to extract feature information and reduce the spatial resolution. Since the architecture is symmetric, the expansion path mirrors the structure of the contraction path. Each level starts with a 2x2x2 transpose convolution to recover the spatial resolution, followed by two sets of a 3x3x3 convolution, a BN and a ReLu. This helps to segment the locations of objects in the data. Additionally, each level has a skip path that concatenates the encoder with its corresponding decoder to pass the high-resolution spatial information that is lost through down-sampling. Finally, a 1x1x1 convolution is used to reduce the output channels to the number of labels - 3 in Figure 1. For this architecture, the weighted softmax loss function is used. It allows the network to train on sparse annotations. By setting the weight of unlabeled voxel to 0, the model can only learn from the labelled voxels to generalise the whole volume (Çiçek et al, 2016).<br><br>
+
+**NOTE**: The 3D U-Net implemented in this project does not strictly follow the architecture proposed by Çiçek et al. (2016). The model had to be simplified due to the limited computational resources. See the [model definition](#model-definition) section for more details.
 
 ## Data Loading and Preprocessing    
 The MRI and label data are stored separately in the format of 3D Nifti files. The [Prostate 3D data set](https://data.csiro.au/collection/csiro:51392v2?redirected=true) consists of 211 3D MRI data for 38 patients, where each volume is 256x256x128 voxels. However, to prevent CUDA out-of-memory issues, the MRIs and labels have been cropped in to 128x128x64 voxels for each volume, which is only 1/8 of the original volume.
@@ -61,9 +63,9 @@ This step handles the preprocessing of loading of the MRI and label data.
 - Wraps the datasets into `DataLoaders` objects with batching and shuffling.
   
 ## Model Definition
-The actual model is implemented in [modules.py](modules.py), follows the architecture in Figure 1. However, a few adjustments are made:
+The actual model is implemented in [modules.py](modules.py), it does not strictly follow the architecture in Figure 1. The following adjustments are made:
 - The **input channel is 1** and the **output channel is 6**, because the MRIs are greyscale and there are 6 segmentation labels.  
-- The model was simplified to **three encoder layers** instead of four, and the **bottleneck has channel dimensions reduced from 512 to 256**. This design choice for reducing GPU memory usage, training time and overfitting, given the relatively small and cropped training set.
+- The model was simplified to **three encoder layers** instead of four, and the **bottleneck has channel dimensions reduced from 512 to 256**. This design choice is for reducing GPU memory usage, training time and overfitting, given the relatively small and cropped training set.
 
 ### The Structure
 - `BasicConv3D` block consists of two sets of 3D convolution, 3D BN, ReLu and 3D drop out with the probability of 0.1.
@@ -127,24 +129,40 @@ checkpoint = torch.load(checkpoint_path, map_location=device)
 model.load_state_dict(checkpoint["model_state_dict"]) # Load the parameters
 ```
 
+The 3D U-Net model predicts the test set with a mean DSC of approximately 0.9269 for all classes, which satisfy the requirement - "to achieve **Dice Similarity coefficient ≥ 0.7** for all classes on the test set". The following bar graph shows the mean DSC for each label:
+
 <p align="center">
   <img src="Figures/dice_per_class_with_std.png" width="700"/>
   <br><em>Figure 5: Example of Prediction</em>
 </p>
 
-Below shows an example of ground-truth label vs model predicted label on a single MRI:
+Figure 5 suggests that the 3D U-Net model trained, can predict all labels in the test set, with high accuracies (0.859 - 0.991) and low standard errors (0.01 - 0.075). The model predicts the background label the best with a DSC of 0.991 with only 0.014 standard error. Although, the model predicts the prostate label with the lowest DSC of 0.859 with 0.075 standard error, it still segments the prostate label with a high accuracy above the requirement. This could be due to the lack of prostate samples in the [Prostate 3D data set](https://data.csiro.au/collection/csiro:51392v2?redirected=true).
+
+Below shows an example of ground-truth labels vs model predicted labels on a single MRI slice:
 <p align="center">
   <img src="Figures/pred_vs_gt_overlay.png" width="700"/>
   <br><em>Figure 6: Example of Prediction</em>
 </p>
-The predicted regions largely overlap with the ground truth, which supports the 
-visible difference
+The MRI slice consists of three labels - background, bones and rectum. The predicted labels largely overlap with the ground truth labels, which supports the quantitative results earlier, though visible difference can be observed for the rectum.
+
+## Discussion
+The dataset was cropped into only 1/8 of the original voxel size to prevent the CUDA OOM problems, this would limit the performance of model on the original MRI data, which might also explain the reason for the prostate label having the lowest DSC. Although, the model already predicted all labels with high accuracies, it is still recommended to use the original, unmodified dataset if sufficient GPU memory is available.
+
+Additionally, the model architecture implemented in this project was simplified by removing the fourth convolutional layer and reducing the bottleneck dimension, due to the limited computational resources. This project does not strictly follow the architecture suggested by Çiçek et al. (2016).
+
+## Conclusion
+The 3D U-Net is an very effective CNN autoencoder for volumetric segmentation tasks. However, it requires high computational resources and the input data often need to be down-sized, which reduces its representational power from the training set. Additionally, the model is prone to label imbalance, it predicts the dominate labels better than the others. E.g. The background label nominates in the MRI data. The trained model predicted the background label with the highest accuracy of 99.1%, and smaller anatomical regions such as rectum and prostate had the lowest accuracies of 88.5% and 85.9%. The V-Net structure solves this issue by utilising convolutional residual units, enables enhanced feature extraction across multiple spatial scales, which is a more ideal architecture for volumetric segmentation tasks (Wang, Ruhaiyem, & Fu, 2025). 
 
 ## Appendix/Reference
+ChatGPT5 was used to assist with the model implementation and documentation.  
+https://chatgpt.com/c/68f373a7-65ec-8324-905f-53b0f8543012  
+https://chatgpt.com/c/68f9c5fe-7758-8322-b58c-e8caa2564bf4
+
 1. Çiçek, Ö., Abdulkadir, A., Lienkamp, S.S., Brox, T., Ronneberger, O. (2016). 3D U-Net: Learning Dense Volumetric Segmentation from Sparse Annotation. In: Ourselin, S., Joskowicz, L., Sabuncu, M., Unal, G., Wells, W. (eds) Medical Image Computing and Computer-Assisted Intervention – MICCAI 2016. MICCAI 2016. Lecture Notes in Computer Science(), vol 9901. Springer, Cham. https://doi.org/10.1007/978-3-319-46723-8_49
 2. Dowling, J., Greer, P. (2021). Labelled weekly MR images of the male pelvis. v2. - CSIRO. Data Collection. https://doi.org/10.25919/45t8-p065
 3. Geeksforgeeks. (2025). What is Adam Optimizer? - GeeksforGeeks. GeeksforGeeks. https://www.geeksforgeeks.org/deep-learning/adam-optimizer/
 4. Harisha, L. (2023). Dice Coefficient! What is it? Medium. https://lathashreeh.medium.com/dice-coefficient-what-is-it-ff090ec97bda
+5. Wang, J., Ruhaiyem, N. I. R., & Fu, P. (2025). A comprehensive review of U-Net and its variants: Advances and applications in medical image segmentation. arXiv. https://arxiv.org/abs/2502.06895
 
 ## Dependencies
 - torch==2.5.1
@@ -156,4 +174,4 @@ visible difference
 - matplotlib==3.9.2
 - tqdm==4.66.5  
 
-Refer to `requirements.txt` for more details.
+Refer to [requirements.txt](requirements.txt) for more details.
