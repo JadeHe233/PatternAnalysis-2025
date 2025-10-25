@@ -5,7 +5,6 @@ prostate_UNet3D_Qilin_He_48018155_hpc/
 environment.yml
 *.nii
 *.nii.gz
-*.pt
 *.npz
 *.npy
 
