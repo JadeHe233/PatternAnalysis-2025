@@ -92,7 +92,7 @@ std_dice_per_class = dice_all_classes.std(axis=0)
 print(f"Test Dice loss: {avg_test_loss:.4f}  →  Dice ≈ {1 - avg_test_loss:.4f}")
 
 # --- Bar plot for Dice per Class with Std ---
-"""
+
 class_names = ["Background", "Body", "Bones", "Bladder", "Rectum", "Prostate"]
 print("\n Mean Dice Similarity Coefficient per class:")
 for i, (m, s) in enumerate(zip(mean_dice_per_class, std_dice_per_class)):
@@ -126,7 +126,6 @@ plt.grid(axis="y", linestyle="--", alpha=0.6)
 os.makedirs("Figures", exist_ok=True)
 plt.savefig("Figures/dice_per_class_with_std.png", dpi=300, bbox_inches="tight")
 plt.show()
-"""
 
 # --- Plot for Overlay Prediction vs Ground Truth ---
 example_idx = 0

@@ -9,6 +9,7 @@ import time
 import torchio as tio
 import matplotlib.pyplot as plt
 import numpy as np
+import nibabel as nib
 
 print("Script started...")
 
@@ -38,8 +39,6 @@ train_transform = tio.Compose([
 val_transform = tio.Compose([tio.ZNormalization()]) # Augmentation for the val/test set
 
 # --- Plot for Effect of Augmentation ---
-"""
---- Data Augmentation Examples ---
 # Take the first 3 MRI-label pairs
 n_samples = 3
 samples = list(zip(mri_files[:n_samples], label_files[:n_samples]))
@@ -84,7 +83,6 @@ save_path = os.path.join("Figures", "augmentation_examples.png")
 plt.savefig(save_path, dpi=300, bbox_inches='tight')
 
 plt.show()
-"""
 
 # Split the dataset indices
 dataset_size = len(mri_files)
@@ -231,7 +229,7 @@ for epoch in range(num_epochs):
 total_time = time.time() - start_time
 
 # --- Plot for Per-class Dice Loss during Training ---
-"""
+
 os.makedirs("Figures", exist_ok=True)
 train_class_losses = np.array(train_class_losses)  # shape [epochs, num_classes]
 
@@ -256,7 +254,6 @@ plt.grid(alpha=0.4)
 # Save to file (no plt.show() for HPC)
 plt.savefig("Figures/train_dice_coeff_per_class.png", dpi=300, bbox_inches="tight")
 plt.close()
-"""
 
 if early_stop:
     print(f"Training stopped early after {epoch+1} epochs due to no improvement.")

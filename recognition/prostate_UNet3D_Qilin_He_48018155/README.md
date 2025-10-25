@@ -147,3 +147,13 @@ visible difference
 4. Harisha, L. (2023). Dice Coefficient! What is it? Medium. https://lathashreeh.medium.com/dice-coefficient-what-is-it-ff090ec97bda
 
 ## Dependencies
+- torch==2.5.1
+- torchvision==0.20.1
+- torchio==0.19.6
+- nibabel==5.3.0
+- numpy==2.1.1
+- scipy==1.14.1
+- matplotlib==3.9.2
+- tqdm==4.66.5  
+
+Refer to `requirements.txt` for more details.
